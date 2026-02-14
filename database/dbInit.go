@@ -18,6 +18,7 @@ type DataBaseStore interface {
 	Purchase(username string, assetType AssetType, amount int, idempotencyKey uuid.UUID) error
 	Balance(username string) (*UserBalance, error)
 	Ledger(pageToken int, pageSize int) ([]LedgerItemRow, error)
+	Seed(seedSql string) error
 }
 
 func DbInit() (DataBaseStore, error) {

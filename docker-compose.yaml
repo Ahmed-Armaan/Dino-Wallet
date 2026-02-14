@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: dino_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: dino
+      POSTGRES_PASSWORD: dino
+      POSTGRES_DB: dino_wallet
+    #volumes:
+    #  - pgdata:/var/lib/postgresql/data
+
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrator
+    container_name: dino_migrator
+    depends_on:
+      - postgres
+    environment:
+        DATABASE_URL: postgres://dino:dino@postgres:5432/dino_wallet?sslmode=disable
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: dino_app
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://dino:dino@postgres:5432/dino_wallet?sslmode=disable
+      PORT: 9000
+    ports:
+      - "9000:9000"
+    restart: always
+
+volumes:
+  pgdata:

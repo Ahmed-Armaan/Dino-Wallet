@@ -239,10 +239,10 @@ func (db *DataBaseHolder) Purchase(username string, assetType AssetType, amount 
 	if amount <= 0 {
 		return errors.New("invalid amount")
 	}
+	ErrInsufficientBal := errors.New("insufficient balance")
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := db.db.Transaction(func(tx *gorm.DB) error {
-
 			var user User
 			if err := tx.
 				Where("user_name = ?", username).
@@ -280,7 +280,7 @@ func (db *DataBaseHolder) Purchase(username string, assetType AssetType, amount 
 			}
 
 			if !userAccount.AllowNegative && userAccount.Balance < int64(amount) {
-				return errors.New("insufficient balance")
+				return ErrInsufficientBal
 			}
 
 			ledgerTx := LedgerTransaction{
@@ -324,10 +324,9 @@ func (db *DataBaseHolder) Purchase(username string, assetType AssetType, amount 
 			return nil
 		})
 
-		if err == nil {
-			return nil
+		if err == nil || errors.Is(err, ErrInsufficientBal) {
+			return err
 		}
-
 		time.Sleep(time.Duration(attempt) * 50 * time.Millisecond)
 	}
 
@@ -374,4 +373,17 @@ func (db *DataBaseHolder) Balance(username string) (*UserBalance, error) {
 	}
 
 	return &balance, nil
+}
+
+func (db *DataBaseHolder) Seed(seedSql string) error {
+	if err := db.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(seedSql).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
