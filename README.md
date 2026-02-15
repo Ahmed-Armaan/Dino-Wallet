@@ -4,40 +4,80 @@ Dino Wallet is a wallet service that tracks user credits and spending inside the
 
 ---
 
-## How to Use
+# How to Use
 
-## Build Manually
+## Using Docker
 
-- Start a PostgreSQL database server.
-- Clone the repository:
+Ensure Docker and Docker Compose are installed.
+
+Clone the repository:
 
 ```sh
 git clone https://github.com/Ahmed-Armaan/Dino-Wallet.git
 cd Dino-Wallet
 ```
 
-- Create a `.env` file and configure the environment variables:
+Run Docker Compose:
 
-```env
-DATABASE_URL='<database connection string>'
-PORT=<desired port to run the server> # defaults to 8080
+```sh
+docker compose up
 ```
 
-- Migrate the schema, seed the database, and run the application.
+The application will start on port `8080`.
 
-There are two options to perform migration and seeding:
+Base URL:
+
+```
+http://localhost:8080
+```
 
 ---
 
-## Option 1 — GORM Migrator Script
+## Build Manually
 
-1. Run the GORM migrator:
+### 1. Start PostgreSQL
+
+Ensure a PostgreSQL server is running.
+
+### 2. Clone the Repository
+
+```sh
+git clone https://github.com/Ahmed-Armaan/Dino-Wallet.git
+cd Dino-Wallet
+```
+
+### 3. Configure Environment Variables
+
+Create a `.env` file:
+
+```env
+DATABASE_URL='<database connection string>'
+PORT=<desired port> # defaults to 8080 if not set
+```
+
+Base URL:
+
+```
+http://localhost:<PORT>
+```
+
+If `PORT` is not set, it defaults to `8080`.
+
+---
+
+## Database Migration & Seeding
+
+There are two options to migrate the schema and seed the database.
+
+### Option 1 — GORM Migrator Script
+
+1. Run the migrator:
 
 ```sh
 go run cmd/migrator/.
 ```
 
-2. After migration completes, start the application:
+2. Start the application:
 
 ```sh
 go run .
@@ -45,7 +85,7 @@ go run .
 
 ---
 
-## Option 2 — GORM AutoMigrate + SQL Seed
+### Option 2 — GORM AutoMigrate + SQL Seed
 
 1. Start the server:
 
@@ -53,9 +93,9 @@ go run .
 go run .
 ```
 
-This executes `AutoMigrate`, which builds the database schema automatically.
+This runs `AutoMigrate` and builds the database schema automatically.
 
-2. In a separate terminal, run the seed file manually:
+2. In a separate terminal, execute the seed script:
 
 ```sh
 psql "$DATABASE_URL" -f seed.sql
@@ -65,11 +105,11 @@ Since the application is already running, it does not need to be started again.
 
 ---
 
-## Concurrency & Idempotency
+# Concurrency & Idempotency
 
-### Concurrency
+## Concurrency
 
-All balance-changing operations run inside database transactions.
+All balance-changing operations execute inside database transactions.
 
 To prevent race conditions, a PostgreSQL advisory transaction lock is acquired per user:
 
@@ -77,25 +117,25 @@ To prevent race conditions, a PostgreSQL advisory transaction lock is acquired p
 SELECT pg_advisory_xact_lock(hashtext(user_id))
 ```
 
-Locks are acquired in a deterministic order (per user), ensuring consistent lock ordering and preventing deadlocks.
+Locks are acquired deterministically (per user), ensuring consistent ordering and preventing deadlocks.
 
 This guarantees:
 
-- Only one transaction can modify a user’s associated data at a time
+- Only one transaction can modify a user’s data at a time
 - No double spending
 - No lost updates
 
-Retries are performed to handle temporary lock contention.
+Retries handle temporary lock contention.
 
 ---
 
-### Idempotency
+## Idempotency
 
-Each operation includes a unique UUID idempotency key.
+Each state-changing operation requires a unique UUID `idempotency_key`.
 
 The `idempotency_key` column is enforced as `UNIQUE` in the database.
 
-If the same request is retried with the same key:
+If the same request is retried:
 
 - Duplicate ledger transactions are rejected
 - No duplicate balance updates occur
@@ -106,7 +146,13 @@ This provides safe retry behavior and exactly-once execution semantics.
 
 # API Documentation
 
-Base URL: `http://localhost:<PORT>` if .env is empty it is `http://localhost:8080`
+Base URL:
+
+```
+http://localhost:<PORT>
+```
+
+If `PORT` is not set, it defaults to `8080`.
 
 ---
 
@@ -121,11 +167,13 @@ Credits a user's account.
 ```json
 {
   "user": "alice",
-  "asset": "gold", // assets ca be "gold", "coins" or "gems"
+  "asset": "gold", 
   "amount": 100,
   "idempotency_key": "uuid"
 }
 ```
+
+Assets can be: `"gold"`, `"coins"`, or `"gem"`.
 
 ### Response
 
@@ -173,11 +221,13 @@ Debits a user's account.
 ```json
 {
   "user": "alice",
-  "asset": "gold", // assets ca be "gold", "coins" or "gems"
+  "asset": "gold",
   "amount": 50,
   "idempotency_key": "uuid"
 }
 ```
+
+Assets can be: `"gold"`, `"coins"`, or `"gem"`.
 
 ### Response
 
@@ -209,6 +259,8 @@ Debits a user's account.
 }
 ```
 
+- `400` → Missing user parameter
+- `404` → User not found
 - `500` → Database error
 
 ---
@@ -246,7 +298,5 @@ Debits a user's account.
 ## Notes
 
 - All state-changing operations require a unique `idempotency_key` (UUID).
-- Concurrency is controlled via transactional advisory locks.
+- Concurrency is controlled using transactional advisory locks.
 - Ledger entries follow double-entry accounting principles.
-
-
